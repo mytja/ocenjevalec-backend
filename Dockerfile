@@ -10,7 +10,7 @@ RUN apk add build-base
 RUN go mod download && \
     go env -w GOFLAGS=-mod=mod && \
     go get . && \
-    go build -v -o backend .
+    CGO_ENABLED=1 go build -v -o backend .
 
 FROM alpine:latest
 
