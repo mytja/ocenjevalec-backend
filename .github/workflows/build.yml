@@ -70,5 +70,5 @@ jobs:
         with:
           context: "."
           file: "./Dockerfile"
-          tags: ghcr.io/${{env.REPO}}/backend:latest
+          tags: ghcr.io/${{env.REPO}}/ocenjevalec/backend:latest
           push: true
