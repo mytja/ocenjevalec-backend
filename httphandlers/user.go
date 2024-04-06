@@ -3,6 +3,7 @@ package httphandlers
 import (
 	"HTTP-boilerplate/db"
 	"database/sql"
+	"errors"
 	"github.com/google/uuid"
 	"net/http"
 	"time"
@@ -10,14 +11,13 @@ import (
 
 type TokenResponse struct {
 	UserID   string `json:"user_id"`
-	Token    string `json:"token"`
 	IsAdmin  bool   `json:"is_admin"`
 	Username string `json:"username"`
 }
 
 func (server *httpImpl) Login(w http.ResponseWriter, r *http.Request) {
 	username := r.FormValue("username")
-	pass := r.FormValue("pass")
+	pass := r.FormValue("password")
 	// Check if password is valid
 	user, err := server.db.GetUserByUsername(username)
 	if err != nil {
@@ -48,12 +48,28 @@ func (server *httpImpl) Login(w http.ResponseWriter, r *http.Request) {
 		token = user.LoginToken
 	}
 
-	WriteJSON(w, Response{Data: TokenResponse{Token: token, UserID: user.ID, Username: user.Username, IsAdmin: user.IsAdmin}, Success: true}, http.StatusOK)
+	c := &http.Cookie{
+		Name:     "Authorization",
+		Value:    token,
+		Path:     "/",
+		Expires:  time.Now().Add(30 * 24 * time.Hour),
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   true,
+	}
+
+	if server.config.Debug {
+		c.SameSite = http.SameSiteNoneMode
+	}
+
+	http.SetCookie(w, c)
+
+	WriteJSON(w, Response{Data: TokenResponse{UserID: user.ID, Username: user.Username, IsAdmin: user.IsAdmin}, Success: true}, http.StatusOK)
 }
 
 func (server *httpImpl) NewUser(w http.ResponseWriter, r *http.Request) {
 	username := r.FormValue("username")
-	pass := r.FormValue("pass")
+	pass := r.FormValue("password")
 	if username == "" || pass == "" {
 		WriteJSON(w, Response{Data: "Bad Request. A parameter isn't provided.", Success: false}, http.StatusBadRequest)
 		return
@@ -63,7 +79,7 @@ func (server *httpImpl) NewUser(w http.ResponseWriter, r *http.Request) {
 	var userCreated = true
 	_, err := server.db.GetUserByUsername(username)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			userCreated = false
 		} else {
 			WriteJSON(w, Response{Error: err.Error(), Data: "Could not retrieve user from database", Success: false}, http.StatusInternalServerError)
@@ -71,7 +87,7 @@ func (server *httpImpl) NewUser(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if userCreated == true {
+	if userCreated {
 		WriteJSON(w, Response{Data: "User is already in database", Success: false}, http.StatusUnprocessableEntity)
 		return
 	}
@@ -108,7 +124,7 @@ func (server *httpImpl) NewUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (server *httpImpl) ChangePassword(w http.ResponseWriter, r *http.Request) {
-	user, err := server.db.CheckToken(GetAuthorizationJWT(r))
+	user, err := server.db.CheckToken(GetToken(r))
 	if err != nil {
 		WriteForbiddenJWT(w)
 		return
@@ -139,7 +155,7 @@ func (server *httpImpl) ChangePassword(w http.ResponseWriter, r *http.Request) {
 
 // Logout takes care of invalidating existing session tokens
 func (server *httpImpl) Logout(w http.ResponseWriter, r *http.Request) {
-	user, err := server.db.CheckToken(GetAuthorizationJWT(r))
+	user, err := server.db.CheckToken(GetToken(r))
 	if err != nil {
 		WriteForbiddenJWT(w)
 		return

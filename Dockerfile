@@ -1,4 +1,4 @@
-FROM golang:1.18-alpine AS builder
+FROM golang:1.21-alpine AS builder
 
 COPY . /app
 
@@ -18,4 +18,4 @@ WORKDIR /app
 COPY --from=builder /app/backend ./backend
 
 EXPOSE 80
-CMD [ "./backend", "--useenv" ]
+CMD [ "./backend" ]
