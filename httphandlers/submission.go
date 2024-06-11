@@ -159,7 +159,7 @@ func (server *httpImpl) NewSubmission(w http.ResponseWriter, r *http.Request) {
 	points := 0
 	if test.Verdict == "AC" {
 		if solH != subH {
-			points = problem.Points / 2
+			points = int(float64(problem.Points) * 0.9)
 			test.EvaluationLog += fmt.Sprintf("Applying PART verdict! Contestant: %s (%d), Judge: %s (%d).\n", submissionS, subH, problem.Solution, solH)
 			test.Verdict = "PART"
 		} else {
@@ -167,7 +167,13 @@ func (server *httpImpl) NewSubmission(w http.ResponseWriter, r *http.Request) {
 			test.EvaluationLog += fmt.Sprintf("Equality check passed! Contestant: %s (%d), Judge: %s (%d).\n", submissionS, subH, problem.Solution, solH)
 		}
 	} else if test.Verdict == "WA" {
-		points = int(float64(problem.Points/2) * (float64(test.CorrectTestCases) / float64(test.WrongTestCases+test.CorrectTestCases)))
+		// 0.72 izhaja iz tega, da so točke deljene tako:
+		// 1. del (90 % vseh točk):
+		//    - 70 % 1. dela (skupaj 63 %) gre testnim primerom
+		//    - preostalih 30 % točk prvega dela (skupaj 27 %) gre ekvivalenci vsem testnim primerom, ki v takem primeru ni zadoščena
+		// 2. del (10 % vseh točk):
+		//    - vseh 10 % gre temu, da imajo tekmovalci rešitev identično uradni
+		points = int(float64(problem.Points) * 0.63 * (float64(test.CorrectTestCases) / float64(test.WrongTestCases+test.CorrectTestCases)))
 		test.EvaluationLog += fmt.Sprintf("Wrong answer! Wrong test cases: %d, Correct test cases: %d. Applying partial points: %d!\n", test.WrongTestCases, test.CorrectTestCases, points)
 	}
 
@@ -175,8 +181,8 @@ func (server *httpImpl) NewSubmission(w http.ResponseWriter, r *http.Request) {
 	test.EvaluationLog += fmt.Sprintf("Applying penalty of %d points due to previous submissions! Points before: %d, Points after: %d.\n", len(problems)*30, points, newPoints)
 	points = newPoints
 
-	newPoints = max(0, points-((submittedAfter/competition.PenaltyEach)*competition.Penalty))
-	test.EvaluationLog += fmt.Sprintf("Applying penalty of %d points due to time! Points before: %d, Points after: %d.\n", (submittedAfter/competition.PenaltyEach)*competition.Penalty, points, newPoints)
+	newPoints = max(0, points-(submittedAfter*competition.Penalty))
+	test.EvaluationLog += fmt.Sprintf("Applying penalty of %d points due to time! Points before: %d, Points after: %d.\n", submittedAfter*competition.Penalty, points, newPoints)
 	points = newPoints
 
 	submission.Verdict = test.Verdict
@@ -213,7 +219,7 @@ func (server *httpImpl) UpdateSubmission(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	posodobi := !submission.Public
+	//posodobi := !submission.Public
 
 	public, err := strconv.ParseBool(r.FormValue("public"))
 	if err == nil {
@@ -291,27 +297,23 @@ func (server *httpImpl) UpdateSubmission(w http.ResponseWriter, r *http.Request)
 		totalScore += submissions[len(submissions)-1].Score
 	}
 
-	if posodobi {
-		// v teoriji lahko posodobimo tudi ekipo, čeprav niti ne
-		// "futureproofing"
-		marshal, err := json.Marshal(WSUpdateSubmissionStatus{
-			MessageType:       1,
-			Submission:        submissionId,
-			TeamName:          team.Name,
-			TeamID:            team.ID,
-			ProblemID:         problem.ID,
-			ProblemName:       problem.Name,
-			Verdict:           submission.Verdict,
-			Score:             submission.Score,
-			MaxScore:          problem.Points,
-			TotalScore:        totalScore,
-			SubmissionsBefore: len(past),
-		})
-		if err == nil {
-			server.hub.broadcast <- marshal
-		}
-	} else {
-
+	// v teoriji lahko posodobimo tudi ekipo, čeprav niti ne
+	// "futureproofing"
+	marshal, err := json.Marshal(WSUpdateSubmissionStatus{
+		MessageType:       1,
+		Submission:        submissionId,
+		TeamName:          team.Name,
+		TeamID:            team.ID,
+		ProblemID:         problem.ID,
+		ProblemName:       problem.Name,
+		Verdict:           submission.Verdict,
+		Score:             submission.Score,
+		MaxScore:          problem.Points,
+		TotalScore:        totalScore,
+		SubmissionsBefore: len(past),
+	})
+	if err == nil {
+		server.hub.broadcast <- marshal
 	}
 
 	WriteJSON(w, Response{Data: "OK"}, http.StatusOK)
