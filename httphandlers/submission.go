@@ -133,6 +133,7 @@ func (server *httpImpl) NewSubmission(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, Response{Data: submission}, http.StatusCreated)
 		return
 	}
+	subL := ast.ASTLength(sub, 0)
 
 	sol, err := ast.BuildAST(problem.Solution)
 	if err != nil {
@@ -146,6 +147,7 @@ func (server *httpImpl) NewSubmission(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, Response{Data: submission}, http.StatusCreated)
 		return
 	}
+	solL := ast.ASTLength(sol, 0)
 
 	test, err := ast.TestDigitalSolution(sub, sol)
 	if err != nil {
@@ -158,13 +160,13 @@ func (server *httpImpl) NewSubmission(w http.ResponseWriter, r *http.Request) {
 
 	points := 0
 	if test.Verdict == "AC" {
-		if solH != subH {
-			points = int(float64(problem.Points) * 0.9)
-			test.EvaluationLog += fmt.Sprintf("Applying PART verdict! Contestant: %s (%d), Judge: %s (%d).\n", submissionS, subH, problem.Solution, solH)
-			test.Verdict = "PART"
-		} else {
+		if solH == subH || subL <= solL {
 			points = problem.Points
-			test.EvaluationLog += fmt.Sprintf("Equality check passed! Contestant: %s (%d), Judge: %s (%d).\n", submissionS, subH, problem.Solution, solH)
+			test.EvaluationLog += fmt.Sprintf("Equality check passed! Contestant: %s (%d, len: %d), Judge: %s (%d, len: %d).\n", submissionS, subH, subL, problem.Solution, solH, solL)
+		} else {
+			points = int(float64(problem.Points) * 0.9)
+			test.EvaluationLog += fmt.Sprintf("Applying PART verdict! Contestant: %s (%d, len: %d), Judge: %s (%d, len: %d).\n", submissionS, subH, subL, problem.Solution, solH, solL)
+			test.Verdict = "PART"
 		}
 	} else if test.Verdict == "WA" {
 		// 0.72 izhaja iz tega, da so točke deljene tako:

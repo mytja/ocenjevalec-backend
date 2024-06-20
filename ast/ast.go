@@ -155,6 +155,22 @@ func recursivelyBuildAST(s *string) (*AST, error) {
 	return nil, errors.New(fmt.Sprintf("AST is invalid. Invalid type %s", t))
 }
 
+func ASTLength(ast *AST, current int) int {
+	if ast.Type == INPUT {
+		return current
+	}
+	if ast.SubEntity1 == nil {
+		return current
+	}
+	if ast.Type == NOT {
+		return ASTLength(ast.SubEntity1, current+1)
+	}
+	if ast.SubEntity2 == nil {
+		return ASTLength(ast.SubEntity1, current+1)
+	}
+	return current + ASTLength(ast.SubEntity1, 0) + ASTLength(ast.SubEntity2, 0) + 1
+}
+
 func MinifyString(s string) string {
 	s = strings.ReplaceAll(s, " ", "")
 	s = strings.ToUpper(s)
