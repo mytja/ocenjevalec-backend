@@ -135,6 +135,18 @@ func (server *httpImpl) NewSubmission(w http.ResponseWriter, r *http.Request) {
 	}
 	subL := ast.ASTLength(sub, 0)
 
+	if problem.IsBaseLogicOnly && !ast.VerifyAgainstBase(sub) {
+		submission.SubmissionLog = "AST could not verify the submission's logic against only base logic gates (AND, OR, NOT)"
+		submission.Verdict = "CF" // Compilation failure
+		err = server.db.InsertSubmission(submission)
+		if err != nil {
+			WriteJSON(w, Response{Error: "Server error whilst inserting submission"}, http.StatusInternalServerError)
+			return
+		}
+		WriteJSON(w, Response{Data: submission}, http.StatusCreated)
+		return
+	}
+
 	sol, err := ast.BuildAST(problem.Solution)
 	if err != nil {
 		submission.SubmissionLog = err.Error()
@@ -148,6 +160,18 @@ func (server *httpImpl) NewSubmission(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	solL := ast.ASTLength(sol, 0)
+
+	if problem.IsBaseLogicOnly && !ast.VerifyAgainstBase(sol) {
+		submission.SubmissionLog = "AST could not verify the SOLUTION's logic against only base logic gates (AND, OR, NOT)"
+		submission.Verdict = "SOL_CF" // Solution compilation failure
+		err = server.db.InsertSubmission(submission)
+		if err != nil {
+			WriteJSON(w, Response{Error: "Server error whilst inserting submission"}, http.StatusInternalServerError)
+			return
+		}
+		WriteJSON(w, Response{Data: submission}, http.StatusCreated)
+		return
+	}
 
 	test, err := ast.TestDigitalSolution(sub, sol)
 	if err != nil {

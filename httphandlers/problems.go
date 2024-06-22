@@ -86,22 +86,34 @@ func (server *httpImpl) NewProblem(w http.ResponseWriter, r *http.Request) {
 
 	solution := r.FormValue("solution")
 	solution = ast.MinifyString(solution)
-	_, err = ast.BuildAST(solution)
+	a, err := ast.BuildAST(solution)
 	if err != nil {
 		WriteJSON(w, Response{Error: "AST build failed for the solution"}, http.StatusInternalServerError)
+		return
+	}
+
+	isBaseLogicOnly, err := strconv.ParseBool(r.FormValue("is_base_logic_only"))
+	if err != nil {
+		WriteJSON(w, Response{Error: "Invalid is_base_logic_only"}, http.StatusBadRequest)
+		return
+	}
+
+	if isBaseLogicOnly && !ast.VerifyAgainstBase(a) {
+		WriteJSON(w, Response{Error: "AST verification against base components failed"}, http.StatusInternalServerError)
 		return
 	}
 
 	id := uuid.NewString()
 
 	problem := db.Problem{
-		ID:            id,
-		Name:          name,
-		Solution:      solution,
-		Position:      problemPos,
-		Points:        points,
-		CompetitionID: competition.ID,
-		AuthorID:      user.ID,
+		ID:              id,
+		Name:            name,
+		Solution:        solution,
+		Position:        problemPos,
+		Points:          points,
+		CompetitionID:   competition.ID,
+		AuthorID:        user.ID,
+		IsBaseLogicOnly: isBaseLogicOnly,
 	}
 
 	err = server.db.InsertProblem(problem)
@@ -167,6 +179,22 @@ func (server *httpImpl) UpdateProblem(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		problem.Points = points
+	}
+
+	isBaseLogicOnly, err := strconv.ParseBool(r.FormValue("is_base_logic_only"))
+	if err == nil {
+		problem.IsBaseLogicOnly = isBaseLogicOnly
+		if isBaseLogicOnly {
+			a, err := ast.BuildAST(problem.Solution)
+			if err != nil {
+				WriteJSON(w, Response{Error: "AST build failed for the solution"}, http.StatusInternalServerError)
+				return
+			}
+			if !ast.VerifyAgainstBase(a) {
+				WriteJSON(w, Response{Error: "AST verification against base components failed"}, http.StatusInternalServerError)
+				return
+			}
+		}
 	}
 
 	// to naj bo na koncu, saj posodabljamo druge probleme

@@ -171,6 +171,25 @@ func ASTLength(ast *AST, current int) int {
 	return current + ASTLength(ast.SubEntity1, 0) + ASTLength(ast.SubEntity2, 0) + 1
 }
 
+func VerifyAgainstBase(ast *AST) bool {
+	if ast.Type == INPUT {
+		return true
+	}
+	if ast.SubEntity1 == nil {
+		return true
+	}
+	if ast.Type == NOT {
+		return VerifyAgainstBase(ast.SubEntity1)
+	}
+	if ast.SubEntity2 == nil {
+		return VerifyAgainstBase(ast.SubEntity1)
+	}
+	if ast.Type == AND || ast.Type == OR {
+		return VerifyAgainstBase(ast.SubEntity1) && VerifyAgainstBase(ast.SubEntity2)
+	}
+	return false
+}
+
 func MinifyString(s string) string {
 	s = strings.ReplaceAll(s, " ", "")
 	s = strings.ToUpper(s)
